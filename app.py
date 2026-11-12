@@ -12,7 +12,7 @@ COOKIE='mudar_session'
 
 def create_app(config=None):
  app=Flask(__name__,static_folder=None)
- app.config.update(SECRET_KEY=os.environ.get('MUDAR_SESSION_SECRET'),PRODUCTION=bool(os.environ.get('VERCEL')),DATABASE_URL=os.environ.get('MUDAR_DATABASE_URL'),LOCAL_DB=os.environ.get('MUDAR_LOCAL_DB'),PUBLIC_ORIGIN=os.environ.get('MUDAR_PUBLIC_ORIGIN','http://127.0.0.1:5180'),BOT_BRIDGE_SECRET=os.environ.get('MUDAR_BOT_BRIDGE_SECRET'),MAILER=configured_mailer(),BRIDGE_ENABLED=os.environ.get('MUDAR_BRIDGE_ENABLED')=='1',MAX_CONTENT_LENGTH=16384,SESSION_COOKIE_NAME=COOKIE,SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SAMESITE='Lax',PERMANENT_SESSION_LIFETIME=86400)
+ app.config.update(SECRET_KEY=os.environ.get('MUDAR_SESSION_SECRET'),PRODUCTION=bool(os.environ.get('VERCEL')),DATABASE_URL=os.environ.get('MUDAR_DATABASE_URL') or os.environ.get('MUDAR_DATABASE_DATABASE_URL'),LOCAL_DB=os.environ.get('MUDAR_LOCAL_DB'),PUBLIC_ORIGIN=os.environ.get('MUDAR_PUBLIC_ORIGIN') or ('https://'+os.environ['VERCEL_URL'] if os.environ.get('VERCEL_ENV')=='preview' and os.environ.get('VERCEL_URL','').endswith('.vercel.app') else 'http://127.0.0.1:5180'),BOT_BRIDGE_SECRET=os.environ.get('MUDAR_BOT_BRIDGE_SECRET'),MAILER=configured_mailer(),BRIDGE_ENABLED=os.environ.get('MUDAR_BRIDGE_ENABLED')=='1',MAX_CONTENT_LENGTH=16384,SESSION_COOKIE_NAME=COOKIE,SESSION_COOKIE_HTTPONLY=True,SESSION_COOKIE_SAMESITE='Lax',PERMANENT_SESSION_LIFETIME=86400)
  if config:app.config.update(config)
  prod=app.config['PRODUCTION'];secret=app.config['SECRET_KEY']
  if not secret or len(secret)<32:raise RuntimeError('MUDAR_SESSION_SECRET must contain at least 32 characters')
@@ -73,6 +73,16 @@ def create_app(config=None):
  def failed(e):return error('تعذّر إكمال الطلب الآن. حاول لاحقًا.',503)
  @app.get('/health')
  def health():return jsonify(status='ok',service='mudar-unified',mode='production' if prod else 'development')
+ @app.get('/health/ready')
+ def readiness():
+  database_ready=False
+  try:
+   with store.transaction() as q:
+    for table in ('mudar_accounts','mudar_tokens','mudar_limits','mudar_audit'):q.execute('SELECT 1 FROM '+table+' LIMIT 0')
+   database_ready=True
+  except Exception:pass
+  checks=dict(database=database_ready,verification_mail=bool(app.config['MAILER']),telegram_bridge=bool(app.config['BRIDGE_ENABLED'] and app.config['BOT_BRIDGE_SECRET']))
+  return jsonify(ready=database_ready and checks['verification_mail'],checks=checks),200 if database_ready and checks['verification_mail'] else 503
  @app.get('/')
  @app.get('/login')
  @app.get('/account')

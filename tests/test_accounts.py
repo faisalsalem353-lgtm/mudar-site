@@ -103,4 +103,13 @@ class Accounts(unittest.TestCase):
   self.assertEqual(post('/api/auth/login',dict(email='prod@example.test',password='a very private password')).status_code,200)
   self.assertIn('Secure',c.get('/api/session').headers['Set-Cookie'])
 
+ def test_readiness_checks_dependencies_without_revealing_secrets(self):
+  self.assertEqual(self.client.get('/health/ready').status_code,200)
+  self.app.config['MAILER']=None
+  r=self.client.get('/health/ready');self.assertEqual(r.status_code,503);self.assertFalse(r.json['checks']['verification_mail']);self.assertNotIn('test-secret',str(r.json))
+ def test_neon_prefix_and_preview_origin(self):
+  from unittest.mock import patch
+  with patch.dict('os.environ',{'MUDAR_SESSION_SECRET':'y'*40,'MUDAR_DATABASE_DATABASE_URL':'postgresql://localhost/new_test?sslmode=require','VERCEL_ENV':'preview','VERCEL_URL':'mudar-example.vercel.app'},clear=True):
+   a=create_app();self.assertEqual(a.config['DATABASE_URL'],'postgresql://localhost/new_test?sslmode=require');self.assertEqual(a.config['PUBLIC_ORIGIN'],'https://mudar-example.vercel.app')
+
 if __name__=='__main__':unittest.main()
