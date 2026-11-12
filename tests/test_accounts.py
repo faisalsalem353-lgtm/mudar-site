@@ -1,7 +1,7 @@
 import hashlib,sys,tempfile,unittest
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from app import create_app
+from application import create_app
 
 class Accounts(unittest.TestCase):
  def setUp(self):
